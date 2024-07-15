@@ -1,0 +1,29 @@
+type = "directrequest"
+schemaVersion = 1
+name = "driver-test-2"
+externalJobID = "535cfb63-f635-4f57-a2dc-dcb7803a2807"
+forwardingAllowed = false
+maxTaskDuration = "0s"
+contractAddress = "0x0e65096276F066ECeB14A45f5472f97E8D22De96"
+evmChainID = "1337"
+minIncomingConfirmations = 0
+minContractPaymentLinkJuels = "0"
+observationSource = """
+    decode_log   [type="ethabidecodelog"
+                  abi="OracleRequest(bytes32 indexed specId, address requester, bytes32 requestId, uint256 payment, address callbackAddr, bytes4 callbackFunctionId, uint256 cancelExpiration, uint256 dataVersion, bytes data)"
+                  data="$(jobRun.logData)"
+                  topics="$(jobRun.logTopics)"]
+
+    decode_cbor  [type="cborparse" data="$(decode_log.data)"]
+    fetch        [type="http" method=GET url="https://ipfs.io/ipfs/$(decode_cbor.cid)" allowUnrestrictedNetworkAccess="true"]
+    parse        [type="jsonparse" data="$(fetch)" path="$(decode_cbor.path)"]
+
+    encode_data  [type="ethabiencode" abi="(bytes32 requestId, string data)" data="{ \\"requestId\\": $(decode_log.requestId), \\"data\\": $(parse) }"]
+    encode_tx    [type="ethabiencode"
+                  abi="fulfillDatasetRequest(bytes32 requestId, string data)"
+                  data="{\\"requestId\\": $(decode_log.requestId), \\"data\\": $(parse)}"
+                  ]
+    submit_tx    [type="ethtx" to="0x0e65096276F066ECeB14A45f5472f97E8D22De96" data="$(encode_tx)"]
+
+    decode_log -> decode_cbor -> fetch -> parse -> encode_data -> encode_tx -> submit_tx
+"""
